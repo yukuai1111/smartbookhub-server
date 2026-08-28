@@ -26,8 +26,8 @@
  npm install
  node app.js
  ```
- 
-### 将  .env.example  复制为  .env ，配置数据库、密钥等环境参数。
+### 环境变量配置 
+-  将  .env.example  复制为  .env ，配置数据库、密钥等环境参数。
  
 ### 仓库地址
 - 前端：https://github.com/yukuai1111/smartbookhub-front
