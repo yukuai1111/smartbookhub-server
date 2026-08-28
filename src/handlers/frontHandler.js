@@ -7,9 +7,7 @@ const { createStreamResponse } = require('../utils/streamUtils.js')
 //获取个人信息
 const userinfo = async (req, res, next) => {
     try {
-        console.log(req.user)
         const { userId } = req.user
-        console.log(userId)
         const userinfo = await getUserinfo(userId)
         res.ok('获取用户信息成功', { userinfo })
     } catch (err) {
