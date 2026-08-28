@@ -1,15 +1,19 @@
-# 依赖
+# 依赖包
 node_modules/
 
-# 环境变量
+# 环境变量（数据库密码、JWT密钥禁止上传）
 .env
+.env.local
 
-# 用户上传的图片（忽略整个目录，但已跟踪的默认图片不会被影响）
-uploads/
+# 用户上传图片目录（头像、封面）
+public/images/cover/
+public/images/avatar/
 
 # 日志文件
 *.log
+logs/
 
-# 系统文件
+# 编辑器、系统文件
+.vscode/
 .DS_Store
 Thumbs.db
