@@ -1,45 +1,102 @@
 const express = require('express')
 const app = express()
+const BusinessError = require('./src/utils/errorHandler.js')
+const Joi = require('joi')
+const multer = require('multer')
+const clearTempCover = require('./src/utils/clearTempImg.js')
 
-//解决跨域+预检请求
+//引入路由
+const logRegRouter = require('./src/routes/logRegRouter.js')
+const articleRouter = require('./src/routes/articleRouter.js')
+const frontRouter = require('./src/routes/frontRouter.js')
+const commentRouter = require('./src/routes/commentRouter.js')
+const adminRouter = require('./src/routes/adminRouter.js')
+const userRouter = require('./src/routes/userRouter.js')
+
+//引入中间件
+const resExtend = require('./src/middleWare/resExtend.js')
+const tokenMiddle = require('./src/middleWare/tokenMiddle.js')
+
+app.use(resExtend)
+
+//解决跨域
 const cors = require('cors');
 app.use(cors());
 
-//这里已经解析请求体了，把body的属性添加在req里了
+//解析请求体
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-//静态资源  app.use('虚拟路径<前后端统一即可>，express.static('真实路径'))
-app.use('/default', express.static('public/image'))    //路径就会变成http://localhost:3000/default/xxxx ，会自动去根目录下的public/image里找
-app.use('/cover', express.static('uploads'))    //路径就会变成http://localhost:3000/cover/xxxx ，会自动去根目录下的uploads里找
-//url的前缀可以是任意的，前端和后端统一就行
- 
+//静态资源
+app.use('/images/cover', express.static('public/images/cover'))
+app.use('/images/avatar', express.static('public/images/avatar'))
 
-//引入中间件（检验token）
-const tokenMiddle = require('./middleWare/tokenMiddle.js')
-
-
-//引入路由
-const logRegRouter = require('./routes/logReg.js')
-const adminRouter = require('./routes/admin.js')
-const frontRouter = require('./routes/front.js')
-const userInfoRouter = require('./routes/userinfo.js')
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+})
 
 //挂载路由
-app.use('/smartbookhub-api/user', logRegRouter)      //登陆注册不需要验证token
-app.use('/smartbookhub-api/admin', tokenMiddle, adminRouter)
-app.use('/smartbookhub-api/front', tokenMiddle, frontRouter)
-app.use('/smartbookhub-api/user-info', tokenMiddle, userInfoRouter)
+app.use('/api/logreg', logRegRouter)      //登陆注册不需要验证token
+app.use('/api/article', tokenMiddle, articleRouter)
+app.use('/api/front', tokenMiddle, frontRouter)
+app.use('/api/comment', tokenMiddle, commentRouter)
+app.use('/api/admin', tokenMiddle, adminRouter)
+app.use('/api/user', tokenMiddle, userRouter)
 
 
-// //监听
-// app.listen(3000,()=>{
-//     console.log('服务器启动成功')
-// })
+//处理错误
+app.use((err, req, res, next) => {
+  //异常先清理临时文件
+  if (req._uploadFilename && req._uploadSubDir === 'cover') {
+    console.log('清除封面文件', req._uploadFilename)
+    clearTempCover(req._uploadFilename, 'cover')
+  }
+  if (req._uploadFilename && req._uploadSubDir === 'avatar') {
+    console.log('清除头像文件', req._uploadFilename)
+    clearTempCover(req._uploadFilename, 'avatar')
+  }
 
+  if (err instanceof BusinessError) {
+    console.log('业务错误', err)
+    return res.no(err.message, err.status)
+  }
+  //如果是校验出错
+  if (err instanceof Joi.ValidationError) {
+    console.log('校验出错', err)
+    return res.no(err.message)
+  }
+
+  //如果是token异常
+  if (err.name === 'TokenExpiredError') {
+    console.log('token过期', err)
+    return res.no('登陆已过期，请重新登录', 401)
+  }
+  if (err.name === 'JsonWebTokenError') {
+    console.log('token验证失败', err)
+    return res.no('登陆凭证非法，请重新登录', 401)
+  }
+
+  //上传文件错误
+  if (err instanceof multer.MulterError) {
+    console.log('上传文件错误', err)
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.no('表单字段名称错误，或者上传了多余文件')
+    }
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.no('文件不能超过5MB')
+    }
+  }
+
+  //其他异常
+  console.log('其他异常', err)
+  return res.no("服务器错误", 500)
+})
 
 //使用动态端口
-const PORT = process.env.PORT || 3000     //3000是默认端口，没有配置环境变量PORT时，使用3000端口（本地测试）
+const PORT = process.env.PORT    //3000是默认端口，没有配置环境变量PORT时，使用3000端口（本地测试）
 app.listen(PORT, () => {
   console.log('服务器启动成功')
 })
