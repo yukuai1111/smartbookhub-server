@@ -1,6 +1,7 @@
 const { articleAdminList, articleUserList, articleDetail, addArticle,
     removeArticle, publishArticle, offlineArticle, passArticle,
-    rejectArticle, updateArticle, recommendArticle, readerList
+    rejectArticle, updateArticle, recommendArticle, readerList,
+    editorUpload
 } = require('../services/articleService')
 const BusinessError = require('../utils/errorHandler')
 //管理员获取文章列表+分页
@@ -54,7 +55,21 @@ const add = async (req, res, next) => {
         next(err)
     }
 }
-
+//文章插图
+const editor = async (req, res, next) => {
+    try {
+        const result = await editorUpload(req.file)
+       res.json({
+        errno:0,
+        data:result
+       })
+    } catch (err) {
+        res.json({
+            errno:1,
+            message:err.message
+        })
+    }
+}
 //删除文章
 const remove = async (req, res, next) => {
     try {
@@ -163,6 +178,7 @@ module.exports = {
     userList,
     detail,
     add,
+    editor,
     remove,
     publish,
     offline,

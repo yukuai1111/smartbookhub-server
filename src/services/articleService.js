@@ -27,6 +27,18 @@ myWhiteList.s = ['style']
 myWhiteList.ol = ['style']
 myWhiteList.ul = ['style']
 myWhiteList.li = ['style']
+myWhiteList.img = ['style','src','alt','width','height','title']
+// 表格
+ myWhiteList.table = ['border','style','width']
+ myWhiteList.tr = ['style']
+ myWhiteList.td = ['colspan','rowspan','style']
+ myWhiteList.th = ['colspan','rowspan','style']
+ // 代码、代码块
+ myWhiteList.pre = ['style']
+ myWhiteList.code = ['style','class']
+ // a文字超链接（跳转另一篇文档）
+ myWhiteList.a = ['href','target','rel','style']
+
 
 // 创建自定义过滤器
 const filterXss = new xss.FilterXSS({
@@ -234,7 +246,7 @@ const articleDetail = async (articleCode, tokenStr) => {
         article.title = filterArticle(article.title)
         article.content = filterArticle(article.content)
         article.summary = filterArticle(article.summary)
-        const { read_user_ids,offline_reason, offlineTime, reject_reason, rejectTime, ...rest } = article
+        const { read_user_ids, offline_reason, offlineTime, reject_reason, rejectTime, ...rest } = article
         article = rest
         return article
     }
@@ -249,6 +261,8 @@ const articleDetail = async (articleCode, tokenStr) => {
         //如果作者不是自己且没上线，就无法查看
         if (article.author_id !== userId && article.status !== 'published') throw new BusinessError('无权查看文章', 403)
         if (article.author_id !== userId) {
+            //阅读量+1
+            article.read_count++
             //阅读别人的文章
             //过滤敏感词
             article.title = filterArticle(article.title)
@@ -272,7 +286,6 @@ const articleDetail = async (articleCode, tokenStr) => {
         }
         const { read_user_ids, ...rest } = article
         article = rest
-        article.read_count++
         return article
     } else {
         throw new BusinessError('用户类型错误')
@@ -311,6 +324,14 @@ const addArticle = async (title, content, summary, filename, userId) => {
     if (insertResult.affectedRows === 0) throw new BusinessError('新增文章失败')
 
     return { code }
+}
+
+//插图上传
+const editorUpload = async (file) => {
+    if (!file) throw new BusinessError('请上传图片文件')
+    const filename = file.filename
+    const url = `/images/editor/${filename}`
+    return { url }
 }
 
 //删除文章
@@ -515,12 +536,12 @@ const recommendArticle = async (tokenStr) => {
     }
     const [articleResult] = await pool.query(sql)
     const recommendList = articleResult.map(item => {
-        const {createTime,status, ...rest } = item
+        const { createTime, status, ...rest } = item
         item = {
             ...rest,
             createTime: createTime.getTime(),
         }
-        if (item.author_id !== userId||isGuest) {
+        if (item.author_id !== userId || isGuest) {
             return {
                 ...item,
                 title: filterArticle(item.title),
@@ -564,6 +585,7 @@ module.exports = {
     articleUserList,
     articleDetail,
     addArticle,
+    editorUpload,
     removeArticle,
     publishArticle,
     offlineArticle,

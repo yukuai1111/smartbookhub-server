@@ -135,7 +135,7 @@ const baseCommentList = async (articleCode, userId, userType, whereSql, params, 
             ...item,
             //格式化昵称
             commentName: nicknameMap.get(item.commentUserId) ?? item.commentName,
-            targetName:item.targetUserId? nicknameMap.get(item.targetUserId) ?? item.targetName:null,
+            targetName: item.targetUserId ? nicknameMap.get(item.targetUserId) ?? item.targetName : null,
             //对内容进行敏感词过滤
             commentContent: filterArticle(item.commentContent),
             commentIsDeleted: item.commentIsDeleted === 1,
@@ -183,17 +183,21 @@ const removeComment = async (articleCode, userId, userType, commentId) => {
     //查看评论在不在
     const [commentResult] = await pool.query('select id,article_code,user_id from article_comment where id=? and is_deleted=0', [commentId])
     if (commentResult.length === 0) throw new BusinessError('评论不存在')
+    //查看文章在不在
+    const [articleResult] = await pool.query('select author_id from articles where code=?', [articleCode])
+    if (articleResult.length === 0) throw new BusinessError('文章不存在')
     const comment = commentResult[0]
+    //找到文章作者
+    const authorId = articleResult[0].author_id
     //查看评论的文章编码
     if (comment.article_code !== articleCode) throw new BusinessError('文章编码有误，无法删除评论！')
-    //如果是普通用户且文章不属于自己的，无法删除别人的评论
     const isAdmin = userType === 1
-    const isAuthor = comment.user_id === userId
+    const isAuthor = authorId === userId
     const isCommentUser = comment.user_id === userId
     if (!isAdmin && !isAuthor && !isCommentUser) throw new BusinessError('无法删除不属于自己的评论')
-    //软删除此评论
-    const [updateResult] = await pool.query('update article_comment set is_deleted=1 where id=? and article_code=?', [commentId, articleCode])
-    if (updateResult.affectedRows === 0) throw new BusinessError('删除失败')
+        const [updateResult] = await pool.query('update article_comment set is_deleted=1 where id=? and article_code=?', [commentId, articleCode])
+        if (updateResult.affectedRows === 0) throw new BusinessError('删除失败')
+
 }
 module.exports = {
     addComment,

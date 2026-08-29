@@ -5,8 +5,8 @@ const { articleAdminListSchema, articleUserListSchema, articleDetailSchema,
     passArticleSchema, rejectArticleSchema,updateArticleSchema,readerListSchema
 } = require('../schemas/articleSchema')
 const validateSchema = require('../middleWare/validateSchema')
-const { adminList, userList, detail, add, remove, publish,offline,pass,reject,update,recommend,reader } = require('../handlers/articleHandler') 
-const {uploadCover} = require('../middleWare/upload')
+const { adminList, userList, detail, add, editor,remove, publish,offline,pass,reject,update,recommend,reader } = require('../handlers/articleHandler') 
+const {uploadCover, uploadEditor} = require('../middleWare/upload')
 const attachUpload = require('../middleWare/attachUpload')
 //管理员获取文章列表
 router.get('/adminList', validateSchema(articleAdminListSchema), adminList)
@@ -17,6 +17,10 @@ router.get('/userList', validateSchema(articleUserListSchema), userList)
 router.get('/detail', validateSchema(articleDetailSchema), detail)
 //新增文章
 router.post('/add',uploadCover.single('cover'),attachUpload('cover'), validateSchema(addArticleSchema), add)
+
+//文章的插图上传
+router.post('/editor',uploadEditor.single('editor'),editor)
+
 //删除文章
 router.delete('/remove', validateSchema(removeArticleSchema), remove)
 //上线文章
