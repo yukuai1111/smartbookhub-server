@@ -50,6 +50,7 @@ async function initAdmin() {
     }
     catch (err) {
         console.log('初始化管理员失败', err)
+        throw err
     }
 }
 //加载所有昵称缓存
@@ -73,16 +74,25 @@ const loadAllNickCache = async () => {
         nickCache.get(u.nickname).add(u.id)
     }
 }
-async function initNicknameCache() {
+async function iniSystem() {
     await initAdmin()
     //加载所有昵称缓存
     await loadAllNickCache()
     console.log('昵称缓存初始化完成')
 }
-//初始化昵称缓存
-initNicknameCache().then(() => {
-    console.log('系统初始化完成')
-}).catch((err) => {
-    console.log('系统初始化失败', err)
-})
+//初始化系统
+let initRunning=false
+function startInit() {
+     if (initRunning) return
+     initRunning = true
+     iniSystem().then(() => {
+         console.log('系统初始化完成')
+         initRunning = false
+     }).catch((err) => {
+         console.log('系统初始化失败，5秒后重试', err.code)
+         initRunning = false
+         setTimeout(startInit, 5000)
+     })
+ }
+ startInit()
 module.exports = {pool,nickCache,adminSet}
