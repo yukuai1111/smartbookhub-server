@@ -217,7 +217,7 @@ const sendMessage = async (message, userId, conversationId, streamCallback, sign
     })
     const aiMessages = []  //要给ai的消息
     //全局提示词
-    const prompt = process.env.ZHIPU_PROMPT
+    const prompt =`你是智能知识库助手，回答风格轻松活泼，语气亲切自然，可以适当使用表情符号，支持简单分点，不要复杂markdown。全部使用中文回答。请结合本次对话的上下文历史理解用户问题，连贯完整地进行回复，不要割裂对话。严禁编造虚假信息，拒绝回答违法违规内容。`
     //增加提示词
     aiMessages.push({
         role: 'system',
