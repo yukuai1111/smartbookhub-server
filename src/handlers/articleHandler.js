@@ -142,8 +142,8 @@ const update = async (req, res, next) => {
     try {
         const { articleCode, title, content, summary } = req.valid
         const filename = req.file ? req.file.filename : ''
-        const { userId, userType } = req.user
-        const code = await updateArticle(articleCode, userId, userType, title, content, summary, filename)
+        const { userId } = req.user
+        const code = await updateArticle(articleCode, userId, title, content, summary, filename)
         res.ok('修改文章成功', code)
     } catch (err) {
         next(err)

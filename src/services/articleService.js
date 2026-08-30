@@ -7,6 +7,7 @@ const fs = require('fs')
 const xss = require('xss')
 const getPlainText = require('../utils/getEditorText')
 const formatNickname = require('../utils/formatNickname')
+const extractImg = require('../utils/extractImg')
 const jwt = require('jsonwebtoken')
 require('dotenv').config()
 const tokenKey = process.env.TokenKey
@@ -27,17 +28,17 @@ myWhiteList.s = ['style']
 myWhiteList.ol = ['style']
 myWhiteList.ul = ['style']
 myWhiteList.li = ['style']
-myWhiteList.img = ['style','src','alt','width','height','title']
+myWhiteList.img = ['style', 'src', 'alt', 'width', 'height', 'title']
 // 表格
- myWhiteList.table = ['border','style','width']
- myWhiteList.tr = ['style']
- myWhiteList.td = ['colspan','rowspan','style']
- myWhiteList.th = ['colspan','rowspan','style']
- // 代码、代码块
- myWhiteList.pre = ['style']
- myWhiteList.code = ['style','class']
- // a文字超链接（跳转另一篇文档）
- myWhiteList.a = ['href','target','rel','style']
+myWhiteList.table = ['border', 'style', 'width']
+myWhiteList.tr = ['style']
+myWhiteList.td = ['colspan', 'rowspan', 'style']
+myWhiteList.th = ['colspan', 'rowspan', 'style']
+// 代码、代码块
+myWhiteList.pre = ['style']
+myWhiteList.code = ['style', 'class']
+// a文字超链接（跳转另一篇文档）
+myWhiteList.a = ['href', 'target', 'rel', 'style']
 
 
 // 创建自定义过滤器
@@ -309,21 +310,46 @@ const addArticle = async (title, content, summary, filename, userId) => {
     //查找此账号的用户昵称
     const [userResult] = await pool.query('select nickname from users where id=?', [userId])
     if (userResult.length === 0) throw new BusinessError('用户不存在')
-
     const author = userResult[0].nickname || '匿名'
     //xss过滤
     const safeContent = filterXss.process(content)
     if (!getPlainText(safeContent).trim()) throw new BusinessError('请输入正文内容！')
-
-    const [insertResult] = await pool.query(
-        `insert into articles
+    //提取插图
+    const imgList = extractImg(safeContent)
+    console.log(imgList)
+    let conn
+    try {
+        conn = await pool.getConnection()
+        conn.beginTransaction()
+        //文章插入数据库
+        const [insertResult] = await conn.query(
+            `insert into articles
         (code,title,content,summary,cover,read_user_ids,author,author_id)
         values (?,?,?,?,?,'[]',?,?)`,
-        [code, title, safeContent, summary, cover, author, userId]
-    )
-    if (insertResult.affectedRows === 0) throw new BusinessError('新增文章失败')
+            [code, title, safeContent, summary, cover, author, userId]
+        )
+        if (insertResult.affectedRows === 0) throw new BusinessError('新增文章失败')
 
-    return { code }
+        //插图绑定文章id
+        for (const img of imgList) {
+          const [updateResult] = await conn.query(
+                'update article_imgs set articleCode=? where imgUrl=? and articleCode is null',
+                [code, img]
+            )
+            if (updateResult.affectedRows === 0) throw new BusinessError('绑定插图失败')
+        }
+        //提交事务
+        await conn.commit()
+        return { code }
+    } catch (err) {
+        //回滚事务
+        await conn.rollback()
+        throw err
+    }
+    finally {
+        //释放连接
+        conn.release()
+    }
 }
 
 //插图上传
@@ -331,6 +357,9 @@ const editorUpload = async (file) => {
     if (!file) throw new BusinessError('请上传图片文件')
     const filename = file.filename
     const url = `/images/editor/${filename}`
+    //插入数据库
+    const [imgResult] = await pool.query('insert into article_imgs (imgUrl) values(?)', [url])
+    if (imgResult.affectedRows === 0) throw new BusinessError('新增插图失败')
     return { url }
 }
 
@@ -351,21 +380,58 @@ const removeArticle = async (articleCode, userId, userType) => {
     } else {
         throw new BusinessError('用户类型错误')
     }
-    const [deleteResult] = await pool.query('delete from articles where code=?', [articleCode])
-    if (deleteResult.affectedRows === 0) throw new BusinessError('删除文章失败')
-    //删除文章成功后才删除图片（如果有的话）
-    if (article.cover !== '/images/cover/default.jpg') {
-        const filePath = path.join('public', article.cover)
-        try {
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath)
+    let conn
+    let imgList = []  //插图列表
+    try {
+        conn = await pool.getConnection()
+        await conn.beginTransaction()
+        //删除插图（如果有的话）
+        const [imgResult] = await conn.query('select imgUrl from article_imgs where articleCode=?', [articleCode])
+        if (imgResult.length !== 0) {
+            imgList = imgResult.map(item => item.imgUrl)
+            //删除数据库
+            const [deleteImgResult] = await conn.query('delete from article_imgs where articleCode=?', [articleCode])
+            if (deleteImgResult.affectedRows === 0) throw new BusinessError('删除插图失败')
+        }
+        //删除文章
+        const [deleteResult] = await conn.query('delete from articles where code=?', [articleCode])
+        if (deleteResult.affectedRows === 0) throw new BusinessError('删除文章失败')
+        await conn.commit()
+        //删除文章成功后才删除封面（如果有的话）
+        if (article.cover !== '/images/cover/default.jpg') {
+            const filePath = path.join('public', article.cover)
+            try {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath)
+                }
+            }
+            catch (err) {
+                console.log('删除封面失败，请重试')
             }
         }
-        catch (err) {
-            console.log('删除封面失败，请重试')
+        //删除插图磁盘文件
+        if (imgList.length !== 0) {
+            for (const img of imgList) {
+                const filePath = path.join('public', img)
+                try {
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath)
+                    }
+                }
+                catch (err) {
+                    console.log('删除插图失败，请重试')
+                }
+            }
         }
+        return { code: articleCode }
+    } catch (err) {
+        await conn.rollback()
+        throw err
     }
-    return { code: articleCode }
+    finally {
+        conn.release()
+    }
+
 }
 
 //上线文章
@@ -472,8 +538,7 @@ const rejectArticle = async (articleCode, userId, userType, rejectReason) => {
 }
 
 //修改文章内容
-const updateArticle = async (articleCode, userId, userType, title, content, summary, filename) => {
-    // let autoPublish = false  //默认不自动上线
+const updateArticle = async (articleCode, userId, title, content, summary, filename) => {
     //查找文章
     const [articleResult] = await pool.query('select id,author_id,title,content,summary,cover,status from articles where code=?', [articleCode])
     if (articleResult.length === 0) throw new BusinessError('文章不存在')
@@ -490,34 +555,85 @@ const updateArticle = async (articleCode, userId, userType, title, content, summ
 
     //修改文章
     let sql = `update articles set ?,updateTime=now() where code=?`
-    const changeData = {}
-    if (title !== undefined) changeData.title = title
-    else changeData.title = article.title
-    if (content !== undefined) {
-        changeData.content = filterXss.process(content)
-        if (!getPlainText(changeData.content).trim()) throw new BusinessError('请输入正文内容')
-    }
-    else changeData.content = article.content
-    if (summary !== undefined) changeData.summary = summary
-    else changeData.summary = article.summary
-    if (filename) {
-        const newCover = `/images/cover/${filename}`
-        //有新图片
-        //先删除旧图片
-        const oldCover = path.join('public', article.cover)
-        try {
-            if (fs.existsSync(oldCover) && article.cover !== '/images/cover/default.jpg') {
-                fs.unlinkSync(oldCover)
+    let conn
+    let deleteImgList = []  //要删除的插图列表
+    try {
+        conn = await pool.getConnection()
+        await conn.beginTransaction()
+        const changeData = {}
+        if (title !== undefined) changeData.title = title
+        else changeData.title = article.title
+        if (content !== undefined) {
+            changeData.content = filterXss.process(content)
+            console.log(changeData.content)
+            if (!getPlainText(changeData.content).trim()) throw new BusinessError('请输入正文内容')
+            //有新内容，才提取新的插图
+            const newImgList = extractImg(changeData.content)
+            console.log('提取的插图',newImgList)
+            //查询旧插图
+            const [oldResult] = await conn.query('select imgUrl from article_imgs where articleCode=?', [articleCode])
+            const oldImgList = oldResult.map(item => item.imgUrl)
+            console.log('旧的插图',oldImgList)
+            //新旧对比，选出要被删除的插图
+            oldImgList.forEach(item => {
+                if (!newImgList.includes(item)) {
+                    deleteImgList.push(item)
+                }
+            })
+            console.log('要删除的插图',deleteImgList)
+            //删除旧插图
+            for (const deleteImg of deleteImgList) {
+                //删除数据库
+                const [deleteResult] = await conn.query('delete from article_imgs where imgUrl=? and articleCode=?', [deleteImg, articleCode])
+                if (!deleteResult.affectedRows) console.log('删除插图失败', deleteImg)
             }
-        } catch (err) {
-            console.log('清除旧图片失败', err)
+            //更新插图：新的图绑定，原有的且不删除的保持不变
+            for (const newImg of newImgList) {
+                 await conn.query('update article_imgs set articleCode=? where imgUrl=? and articleCode is null', [articleCode, newImg])
+            }
         }
-        //再更新
-        changeData.cover = newCover
+        else changeData.content = article.content
+        if (summary !== undefined) changeData.summary = summary
+        else changeData.summary = article.summary
+        if (filename) {
+            const newCover = `/images/cover/${filename}`
+            //更新封面
+            changeData.cover = newCover
+        }
+        const [updateResult] = await conn.query(sql, [changeData, articleCode])
+        if (!updateResult.affectedRows) throw new BusinessError('修改文章失败')
+        await conn.commit()
+        //删除插图
+        for (const deleteImg of deleteImgList) {
+            //删除磁盘文件
+            try {
+                const oldPath = path.join('public', deleteImg)
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath)
+                }
+            } catch (err) {
+                console.log('删除插图文件失败', err)
+            }
+        }
+        //删除封面
+        if (filename) {
+            const oldCover = path.join('public', article.cover)
+            try {
+                if (fs.existsSync(oldCover) && article.cover !== '/images/cover/default.jpg') {
+                    fs.unlinkSync(oldCover)
+                }
+            } catch (err) {
+                console.log('清除旧封面失败', err)
+            }
+        }
+        return { code: articleCode }
+    } catch (err) {
+        await conn.rollback()
+        throw err
     }
-    const [updateResult] = await pool.query(sql, [changeData, articleCode])
-    if (!updateResult.affectedRows) throw new BusinessError('修改文章失败')
-    return { code: articleCode }
+    finally {
+        conn.release()
+    }
 }
 
 //获取文章推荐列表
