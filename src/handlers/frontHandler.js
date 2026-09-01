@@ -65,11 +65,6 @@ const send = async (req, res, next) => {
         stream.end()
     } catch (err) {
         console.log("聊天失败", err)
-        //响应已关闭
-        if (res.writableEnded || res.headersSent) {
-            console.log('聊天失败（响应已关闭）', err)
-            return
-        }
         stream.error({ type: "error", msg: err.message || "聊天失败" })
     } finally {
         //清除控制器

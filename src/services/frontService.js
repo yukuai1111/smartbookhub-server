@@ -162,6 +162,12 @@ const finishAiMessage = async (messageId) => {
         update chat_records set status=2,content=if(content='','Ai异常，未返回内容',content) where id=?`, [messageId])
     if (updateResult.affectedRows === 0) throw new BusinessError('完成AI消息失败')
 }
+//错误消息
+const errAiMessage=async (messageId,errMsg)=>{
+ const [updateResult] = await pool.query(`
+        update chat_records set status=2,content=? where id=?`, [errMsg,messageId])
+    if (updateResult.affectedRows === 0) throw new BusinessError('保存Ai异常消息失败')
+}
 //中断Ai消息（状态被中断）
 const abortAiMessage = async (messageId) => {
     const [updateResult] = await pool.query(`
@@ -217,7 +223,7 @@ const sendMessage = async (message, userId, conversationId, streamCallback, sign
     })
     const aiMessages = []  //要给ai的消息
     //全局提示词
-    const prompt =`你是智能知识库助手，回答风格轻松活泼，语气亲切自然，可以适当使用表情符号，支持简单分点，不要复杂markdown。全部使用中文回答。请结合本次对话的上下文历史理解用户问题，连贯完整地进行回复，不要割裂对话。严禁编造虚假信息，拒绝回答违法违规内容。`
+    const prompt = `你是智能知识库助手，回答风格轻松活泼，语气亲切自然，可以适当使用表情符号，支持简单分点，不要复杂markdown。全部使用中文回答。请结合本次对话的上下文历史理解用户问题，连贯完整地进行回复，不要割裂对话。严禁编造虚假信息，拒绝回答违法违规内容。`
     //增加提示词
     aiMessages.push({
         role: 'system',
@@ -240,17 +246,25 @@ const sendMessage = async (message, userId, conversationId, streamCallback, sign
     try {
         fullResponse = await createStream(aiMessages, onChunk, signal)
     } catch (err) {
+        const title = message.trim().length > 12 ? message.trim().slice(0, 12) : message.trim()
+        //更新标题
+        await pool.query('update conversations set title=? where id=?', [title, conversationId])
         if (isAbortError(err)) {
-            const title = message.trim().length > 12 ? message.trim().slice(0, 12) : message.trim()
             try {
                 //中断标记ai消息
                 await abortAiMessage(aiMessageId)
-                await pool.query('update conversations set title=? where id=?', [title, conversationId])
+                fullResponse = null
             } catch (err) {
                 console.log('更新标题失败', err)
             }
-            fullResponse = null
-        } else {
+        } else if (err instanceof BusinessError) {
+            //云端抛出的错误，存入数据库，判断成生成完毕
+            await errAiMessage(aiMessageId,err.message)
+            //直接返回前端
+           streamCallback({type:'error',errMsg:err.message})
+        }
+        else {
+            await finishAiMessage(aiMessageId,err.message)
             throw err
         }
     }
@@ -332,7 +346,7 @@ const removeMessage = async (userId, messageId) => {
     if (conversationResult.length === 0) throw new BusinessError('会话不存在')
     const conversation = conversationResult[0]
     if (conversation.user_id !== userId) throw new BusinessError('您没有权限删除该消息', 403)
-    if (message.status === 1&&message.role === 'assistant') throw new BusinessError('Ai还在处理中，暂无法删除')
+    if (message.status === 1 && message.role === 'assistant') throw new BusinessError('Ai还在处理中，暂无法删除')
     const [deleteResult] = await pool.query('delete from chat_records where id=?', [messageId])
     if (deleteResult.affectedRows === 0) throw new BusinessError('删除消息失败')
 }
