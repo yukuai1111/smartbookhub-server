@@ -6,8 +6,13 @@ node_modules/
 .env.local
 
 # 用户上传图片目录（头像、封面）
-public/images/cover/
-public/images/avatar/
+public/images/cover/*
+public/images/avatar/*
+public/images/editor/*
+!public/images/cover/default.jpg
+!public/images/avatar/default.jpg
+!public/images/avatar/admin.webp
+
 
 # 日志文件
 *.log

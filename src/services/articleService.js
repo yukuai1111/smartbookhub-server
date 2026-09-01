@@ -316,7 +316,6 @@ const addArticle = async (title, content, summary, filename, userId) => {
     if (!getPlainText(safeContent).trim()) throw new BusinessError('请输入正文内容！')
     //提取插图
     const imgList = extractImg(safeContent)
-    console.log(imgList)
     let conn
     try {
         conn = await pool.getConnection()
@@ -565,22 +564,18 @@ const updateArticle = async (articleCode, userId, title, content, summary, filen
         else changeData.title = article.title
         if (content !== undefined) {
             changeData.content = filterXss.process(content)
-            console.log(changeData.content)
             if (!getPlainText(changeData.content).trim()) throw new BusinessError('请输入正文内容')
             //有新内容，才提取新的插图
             const newImgList = extractImg(changeData.content)
-            console.log('提取的插图',newImgList)
             //查询旧插图
             const [oldResult] = await conn.query('select imgUrl from article_imgs where articleCode=?', [articleCode])
             const oldImgList = oldResult.map(item => item.imgUrl)
-            console.log('旧的插图',oldImgList)
             //新旧对比，选出要被删除的插图
             oldImgList.forEach(item => {
                 if (!newImgList.includes(item)) {
                     deleteImgList.push(item)
                 }
             })
-            console.log('要删除的插图',deleteImgList)
             //删除旧插图
             for (const deleteImg of deleteImgList) {
                 //删除数据库
