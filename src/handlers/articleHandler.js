@@ -64,6 +64,7 @@ const editor = async (req, res, next) => {
         data:result
        })
     } catch (err) {
+        console.log('插图上传失败：',err)
         res.json({
             errno:1,
             message:err.message

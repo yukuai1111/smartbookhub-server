@@ -56,7 +56,7 @@ const changeUserInfo = async (userId, nickname, signature, phone, filename) => {
         //有新头像，清除旧头像
         //判断旧头像是否是默认头像
         if (user.avatar !== '/images/avatar/default.jpg') {
-            const oldFilePath = path.join('public', user.avatar)
+            const oldFilePath = path.join(__dirname, '../../public', user.avatar)
             try {
                 if (fs.existsSync(oldFilePath)) {
                     fs.unlinkSync(oldFilePath)
@@ -369,7 +369,7 @@ const removeUser = async (userId) => {
     }
     //如果头像不是默认头像，要删除头像文件
     if (user.avatar !== '/images/avatar/default.jpg') {
-        const filePath = path.join('public', user.avatar)
+        const filePath = path.join(__dirname, '../../public', user.avatar)
         try {
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath)

@@ -1,5 +1,5 @@
 //全局昵称缓存
-const {pool,nickCache,adminSet} = require('../mysql/mysql.js')
+const {nickCache,adminSet} = require('../mysql/mysql.js')
 
 //获取某个昵称所用的人数
 const getNickCacheCount=(nickname)=>{

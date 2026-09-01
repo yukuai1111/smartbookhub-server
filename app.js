@@ -4,6 +4,8 @@ const BusinessError = require('./src/utils/errorHandler.js')
 const Joi = require('joi')
 const multer = require('multer')
 const clearTempCover = require('./src/utils/clearTempImg.js')
+const cleanEditorImg = require('./src/memory/cleanEditorImg.js')
+cleanEditorImg()
 
 //引入路由
 const logRegRouter = require('./src/routes/logRegRouter.js')

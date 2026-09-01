@@ -398,7 +398,7 @@ const removeArticle = async (articleCode, userId, userType) => {
         await conn.commit()
         //删除文章成功后才删除封面（如果有的话）
         if (article.cover !== '/images/cover/default.jpg') {
-            const filePath = path.join('public', article.cover)
+            const filePath = path.join(__dirname, '../../public', article.cover)
             try {
                 if (fs.existsSync(filePath)) {
                     fs.unlinkSync(filePath)
@@ -411,7 +411,7 @@ const removeArticle = async (articleCode, userId, userType) => {
         //删除插图磁盘文件
         if (imgList.length !== 0) {
             for (const img of imgList) {
-                const filePath = path.join('public', img)
+                const filePath = path.join(__dirname, '../../public', img)
                 try {
                     if (fs.existsSync(filePath)) {
                         fs.unlinkSync(filePath)
@@ -602,7 +602,7 @@ const updateArticle = async (articleCode, userId, title, content, summary, filen
         for (const deleteImg of deleteImgList) {
             //删除磁盘文件
             try {
-                const oldPath = path.join('public', deleteImg)
+                const oldPath = path.join(__dirname, '../../public', deleteImg)
                 if (fs.existsSync(oldPath)) {
                     fs.unlinkSync(oldPath)
                 }
@@ -612,7 +612,7 @@ const updateArticle = async (articleCode, userId, title, content, summary, filen
         }
         //删除封面
         if (filename) {
-            const oldCover = path.join('public', article.cover)
+            const oldCover = path.join(__dirname, '../../public', article.cover)
             try {
                 if (fs.existsSync(oldCover) && article.cover !== '/images/cover/default.jpg') {
                     fs.unlinkSync(oldCover)

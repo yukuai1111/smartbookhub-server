@@ -6,10 +6,8 @@ const extractImg = (content) => {
     let match
     while ((match = reg.exec(content)) !== null) {
         let src=match[1]
-        console.log(src)
         //截取掉前面的协议和域名
         src=src.replace(/^https?:\/\/.+?\d+\//,'/')
-        console.log(src)
         list.push(src)
     }
     return list
